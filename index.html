@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ff8fbf">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Blip, a pixel pocket pet</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #e9e3ff;
+  --grid: rgba(110, 80, 220, .12);
+  --ink: #2a1f55;
+  --muted: #6f64a0;
+  --glass: rgba(255, 255, 255, .55);
+  --glass-edge: rgba(255, 255, 255, .9);
+  --panel: rgba(255, 255, 255, .7);
+  --led-a: #38e8ff;
+  --led-b: #ff4fd8;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0920; --grid: rgba(120, 90, 255, .14); --ink: #f2eeff; --muted: #a69ad6;
+    --glass: rgba(40, 30, 90, .45); --glass-edge: rgba(180, 160, 255, .35); --panel: rgba(30, 22, 70, .85);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0920; --grid: rgba(120, 90, 255, .14); --ink: #f2eeff; --muted: #a69ad6;
+  --glass: rgba(40, 30, 90, .45); --glass-edge: rgba(180, 160, 255, .35); --panel: rgba(30, 22, 70, .85);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  min-height: 100vh;
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 28px 28px,
+    var(--bg);
+  color: var(--ink);
+  font-family: 'Fredoka', system-ui, sans-serif;
+  display: grid;
+  place-items: center;
+  padding: 20px 12px;
+  /* phone stuff: no double tap zoom, no blue tap flash, no text selecting */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+}
+
+/* the handheld */
+.device {
+  position: relative;
+  width: min(420px, 100%);
+  padding: 18px 18px 20px;
+  margin-top: 30px;
+  border-radius: 46px;
+  background: radial-gradient(circle at 25% 15%, #ffd0e4, #ff8fbf 40%, #e9559a);
+  box-shadow: inset -10px -14px 0 rgba(0,0,0,.12), inset 8px 10px 0 rgba(255,255,255,.35), 0 26px 50px -18px rgba(120, 30, 90, .5);
+}
+.device > .loop {
+  position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+  width: 48px; height: 48px; border: 10px solid #e9559a; border-radius: 50%;
+}
+.device::before {
+  /* holographic sheen on the shell */
+  content: ""; position: absolute; inset: -2px; border-radius: 46px; display: none; padding: 2px; pointer-events: none;
+  background: linear-gradient(120deg, #7dffd6, #c7a6ff, #ffa6d9, #fff28a, #7dffd6);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; opacity: .8;
+}
+.top { display: flex; align-items: center; justify-content: space-between; padding: 0 6px 12px; gap: 8px; }
+.name { font-weight: 700; font-size: 22px; color: #fff; text-shadow: 0 2px 0 #c23c7c; }
+.sub { font-size: 13px; color: #6b1d45; }
+.coins {
+  font-family: 'Silkscreen', monospace; font-size: 15px;
+  background: var(--panel); border: 2px solid var(--glass-edge);
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+}
+
+/* screen with chasing LED ring */
+.screen-wrap { position: relative; border-radius: 26px; padding: 5px; overflow: hidden; }
+.screen-wrap::before {
+  content: ""; position: absolute; inset: -60%;
+  background: conic-gradient(from 0deg, var(--led-a), var(--led-b), var(--led-a), var(--led-b), var(--led-a));
+  animation: spin 4s linear infinite;
+}
+.screen-wrap.dim::before { filter: brightness(.35); animation-duration: 12s; }
+@keyframes spin { to { transform: rotate(1turn); } }
+canvas { position: relative; display: block; width: 100%; border-radius: 22px; background: #0a0618; touch-action: none; image-rendering: pixelated; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 2px 0; }
+.stat { background: var(--panel); border: 2px solid var(--glass-edge); border-radius: 14px; padding: 6px 8px; font-size: 13px; }
+.stat b { display: block; font-weight: 500; margin-bottom: 4px; }
+.meter { height: 7px; border-radius: 9px; background: rgba(120, 100, 200, .2); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 9px; background: linear-gradient(90deg, var(--led-a), var(--led-b)); transition: width .4s; }
+
+.dock { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 14px; }
+.dock button {
+  font: 500 13px 'Fredoka', system-ui, sans-serif; color: var(--ink);
+  background: var(--panel); border: 2px solid var(--glass-edge); border-radius: 18px;
+  padding: 8px 2px 7px; cursor: pointer; display: grid; gap: 1px; justify-items: center;
+}
+.dock button span { font-size: 22px; line-height: 1.1; }
+.dock button:active { transform: scale(.94); }
+.dock button:disabled { opacity: .4; cursor: default; transform: none; }
+button:focus-visible { outline: 3px solid var(--led-b); outline-offset: 2px; }
+
+/* sheets that slide over the screen */
+.sheet {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; max-height: calc(100% - 24px);
+  overflow: auto; background: var(--panel); backdrop-filter: blur(16px);
+  border: 2px solid var(--glass-edge); border-radius: 26px; padding: 16px;
+  transform: translateY(110%); visibility: hidden; z-index: 5;
+  transition: transform .28s cubic-bezier(.2, 1.2, .4, 1), visibility 0s .28s;
+}
+.sheet.open { transform: none; visibility: visible; transition-delay: 0s; }
+.sheet h2 { font-size: 19px; font-weight: 600; margin-bottom: 4px; }
+.sheet .hint { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.sheet .close { position: absolute; top: 12px; right: 14px; font: 600 20px 'Fredoka'; background: none; border: 0; color: var(--muted); cursor: pointer; }
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.item {
+  font: 500 14px 'Fredoka', system-ui, sans-serif; color: var(--ink); text-align: left;
+  background: rgba(120, 100, 220, .1); border: 2px solid transparent; border-radius: 16px;
+  padding: 10px; cursor: pointer; display: grid; gap: 2px;
+}
+.item .emo { font-size: 28px; }
+.item small { color: var(--muted); font-size: 12px; }
+.item .price { font-family: 'Silkscreen', monospace; font-size: 11px; }
+.item.on { border-color: var(--led-b); }
+.item:disabled { opacity: .45; cursor: default; }
+.tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.tabs button { font: 500 14px 'Fredoka'; border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer; background: rgba(120, 100, 220, .12); color: var(--ink); }
+.tabs button.on { background: var(--led-b); color: #fff; }
+.namebox { display: flex; gap: 8px; }
+.namebox input { flex: 1; font: 500 17px 'Fredoka'; padding: 10px 14px; border-radius: 14px; border: 2px solid var(--glass-edge); background: rgba(255,255,255,.6); color: #2a1f55; }
+.big { font: 600 16px 'Fredoka'; padding: 10px 18px; border: 0; border-radius: 14px; background: linear-gradient(90deg, var(--led-a), var(--led-b)); color: #fff; cursor: pointer; }
+.toast { text-align: center; font-size: 14px; color: #6b1d45; min-height: 20px; margin-top: 12px; }
+
+/* phones */
+@media (max-width: 480px) {
+  body { padding: 34px 8px 12px; align-items: start; }
+  .device { padding: 14px 12px 12px; border-radius: 36px; margin-top: 0; }
+  .name { font-size: 19px; }
+  .stats { grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+  .stat { padding: 5px 8px; font-size: 12px; }
+  .dock { gap: 6px; margin-top: 10px; }
+  .dock button { padding: 9px 0 8px; font-size: 12px; border-radius: 16px; min-height: 56px; }
+  .dock button span { font-size: 24px; }
+  .sheet { left: 8px; right: 8px; bottom: 8px; padding: 14px; }
+  .items { grid-template-columns: 1fr 1fr; }
+  .toast { margin-top: 8px; }
+}
+@media (max-height: 700px) and (max-width: 480px) {
+  /* short phones: squeeze the stats into one row instead of hiding them */
+  .stats { grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 8px; }
+  .stat { padding: 4px 5px; font-size: 11px; border-radius: 10px; }
+  .stat b { margin-bottom: 3px; white-space: nowrap; }
+  .dock button { min-height: 50px; padding: 6px 0; }
+  .dock button span { font-size: 21px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-wrap::before { animation: none; }
+  .sheet { transition: none; }
+}
+</style>
+</head>
+<body>
+<main class="device" id="device">
+  <div class="loop"></div>
+  <div class="top">
+    <div>
+      <div class="name" id="name">Blip</div>
+      <div class="sub" id="sub">an egg</div>
+    </div>
+    <div class="coins" id="coins">🪙 0</div>
+  </div>
+
+  <div class="screen-wrap" id="wrap">
+    <canvas id="cv" width="720" height="600" aria-label="Your pet"></canvas>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>🍙 Food</b><div class="meter"><i id="m-full"></i></div></div>
+    <div class="stat"><b>🎈 Fun</b><div class="meter"><i id="m-fun"></i></div></div>
+    <div class="stat"><b>⚡ Energy</b><div class="meter"><i id="m-energy"></i></div></div>
+    <div class="stat"><b>🫧 Clean</b><div class="meter"><i id="m-clean"></i></div></div>
+  </div>
+
+  <div class="dock">
+    <button id="b-feed"><span>🍙</span>Feed</button>
+    <button id="b-play"><span>🎮</span>Play</button>
+    <button id="b-clean"><span>🧼</span>Clean</button>
+    <button id="b-light"><span>💡</span>Light</button>
+    <button id="b-style"><span>👒</span>Style</button>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <div class="sheet" id="sheet"></div>
+</main>
+
+<script>
+// BLIP - a little cyber pocket pet
+// it lives in your browser and keeps going while you're away
+
+const cv = document.getElementById('cv'), screen = cv.getContext('2d')
+// the whole scene is drawn small then scaled up 4x so it looks like a real pixel lcd
+const lo = document.createElement('canvas')
+lo.width = 180; lo.height = 150
+const ctx = lo.getContext('2d')
+ctx.scale(0.5, 0.5)
+// lcd dot grid, made once
+const dots = document.createElement('canvas')
+dots.width = 720; dots.height = 600
+{
+  const d = dots.getContext('2d')
+  d.fillStyle = 'rgba(0,0,0,.09)'
+  for (let i = 0; i < 720; i += 4) d.fillRect(i, 0, 1, 600)
+  for (let i = 0; i < 600; i += 4) d.fillRect(0, i, 720, 1)
+}
+function present() {
+  screen.imageSmoothingEnabled = false
+  screen.clearRect(0, 0, 720, 600)
+  screen.drawImage(lo, 0, 0, 720, 600)
+  if (room().lcd) {
+    // classic green lcd tint
+    screen.globalCompositeOperation = 'color'
+    screen.fillStyle = '#7f9a2a'
+    screen.fillRect(0, 0, 720, 600)
+    screen.globalCompositeOperation = 'source-over'
+  }
+  screen.drawImage(dots, 0, 0)
+}
+const W = 360, H = 300, FLOOR = 262
+const $ = id => document.getElementById(id)
+const rand = (a, b) => a + Math.random() * (b - a)
+const pick = a => a[Math.random() * a.length | 0]
+const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v))
+const lerp = (a, b, k) => a + (b - a) * k
+
+// ---------------- content ----------------
+const FOODS = [
+  { id: 'rice', emo: '🍙', name: 'Rice ball', cost: 4, desc: 'Food +25', full: 25 },
+  { id: 'candy', emo: '🍬', name: 'Candy', cost: 3, desc: 'Fun +10', full: 3, fun: 10 },
+  { id: 'cake', emo: '🍰', name: 'Cake', cost: 10, desc: 'Food +15, fun +20', full: 15, fun: 20 },
+  { id: 'juice', emo: '🧃', name: 'Volt juice', cost: 6, desc: 'Energy +20', full: 5, energy: 20 },
+  { id: 'ramen', emo: '🍜', name: 'Ramen', cost: 8, desc: 'Food +40', full: 40 },
+  { id: 'meds', emo: '💊', name: 'Medicine', cost: 12, desc: 'Cures sickness', meds: true },
+]
+const STYLE = {
+  hats: [
+    { id: 'none', emo: '🚫', name: 'Nothing', cost: 0 },
+    { id: 'bow', emo: '🎀', name: 'Bow', cost: 30 },
+    { id: 'cap', emo: '🧢', name: 'Cap', cost: 40 },
+    { id: 'phones', emo: '🎧', name: 'Neon phones', cost: 60 },
+    { id: 'visor', emo: '🥽', name: 'Cyber visor', cost: 80 },
+    { id: 'crown', emo: '👑', name: 'Crown', cost: 120 },
+  ],
+  skins: [
+    { id: 'mint', emo: '🟢', name: 'Mint', cost: 0, a: '#8dffe0', b: '#2fcfb0' },
+    { id: 'gum', emo: '🩷', name: 'Bubblegum', cost: 50, a: '#ffb3df', b: '#ff5fb1' },
+    { id: 'grape', emo: '🟣', name: 'Grape', cost: 50, a: '#d3b8ff', b: '#8e5cff' },
+    { id: 'lemon', emo: '🟡', name: 'Lemon', cost: 50, a: '#fff59a', b: '#ffc93f' },
+    { id: 'holo', emo: '🌈', name: 'Holo', cost: 150 },
+  ],
+  rooms: [
+    { id: 'lcd', emo: '📟', name: 'Classic LCD', cost: 0, c: '#b6ff3b', d: '#38e8ff', lcd: true },
+    { id: 'cyan', emo: '🩵', name: 'Cyan', cost: 0, c: '#38e8ff', d: '#ff4fd8' },
+    { id: 'pink', emo: '💗', name: 'Hot pink', cost: 30, c: '#ff4fd8', d: '#8e5cff' },
+    { id: 'lime', emo: '💚', name: 'Lime', cost: 30, c: '#9dff4f', d: '#38e8ff' },
+    { id: 'sunset', emo: '🧡', name: 'Sunset', cost: 30, c: '#ff9a3c', d: '#ff4f7a' },
+  ],
+}
+const QUIRKS = {
+  Sneezy: 'sneeze', Dancer: 'dance', Sleepyhead: 'yawn', Foodie: 'ask', 'Show-off': 'flip',
+}
+const GAMES = [
+  { id: 'catch', emo: '🪙', name: 'Coin Rain', desc: 'Catch coins, dodge bugs' },
+  { id: 'simon', emo: '💡', name: 'Light Memory', desc: 'Repeat the light pattern' },
+  { id: 'shell', emo: '📦', name: 'Where’s Blip?', desc: 'Follow the box' },
+]
+
+// ---------------- save data ----------------
+function freshPet(name) {
+  return {
+    name, stage: 'egg', age: 0,
+    full: 80, fun: 80, energy: 90, clean: 100, health: 100,
+    poops: 0, poopT: 180, sick: false, sickT: 0, asleep: false, light: true, gone: false,
+    coins: 30, quirk: pick(Object.keys(QUIRKS)), fav: pick(FOODS.filter(f => !f.meds)).id,
+    hat: 'none', skin: 'mint', room: 'lcd', owned: ['none', 'mint', 'lcd', 'cyan'],
+    lastDaily: '', saved: Date.now(),
+  }
+}
+let pet = null
+try { pet = JSON.parse(localStorage.getItem('blip-v2')) } catch (e) {}
+const save = () => { if (!pet) return; pet.saved = Date.now(); try { localStorage.setItem('blip-v2', JSON.stringify(pet)) } catch (e) {} }
+
+// ---------------- sound ----------------
+let ac
+function tone(f, dur = 0.1, type = 'sine', vol = 0.06, slide = 1, at = 0) {
+  try {
+    if (!ac) ac = new AudioContext()
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + at
+    o.type = type
+    o.frequency.setValueAtTime(f, t)
+    o.frequency.exponentialRampToValueAtTime(f * slide, t + dur)
+    g.gain.setValueAtTime(vol, t)
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur)
+    o.connect(g).connect(ac.destination)
+    o.start(t); o.stop(t + dur)
+  } catch (e) {}
+}
+const sfx = {
+  chirp: () => { tone(880, 0.08, 'square', 0.04); tone(1320, 0.1, 'square', 0.04, 1, 0.08) },
+  coin: () => { tone(1200, 0.06, 'square', 0.04); tone(1800, 0.12, 'square', 0.04, 1, 0.06) },
+  nope: () => tone(220, 0.18, 'square', 0.05, 0.7),
+  pop: () => tone(500, 0.08, 'sine', 0.08, 2),
+  boop: () => tone(700, 0.06, 'triangle', 0.08, 1.5),
+  achoo: () => { tone(300, 0.3, 'sawtooth', 0.05, 2.5) },
+  pad: i => tone([523, 659, 784, 1046][i], 0.3, 'triangle', 0.1),
+  win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.15, 'square', 0.04, 1, i * 0.09)),
+}
+
+// ---------------- life sim ----------------
+let toastT = 0
+function toast(msg, secs = 3) { $('toast').textContent = msg; toastT = secs }
+
+function step(s) {
+  if (!pet || pet.gone) return
+  pet.age += s
+  if (pet.stage == 'egg') {
+    if (pet.age >= 15) { pet.stage = 'baby'; toast(`${pet.name} hatched! It’s a ${pet.quirk}.`, 5); sfx.win(); burst(180, 220, '✨', 12) }
+    return
+  }
+  pet.stage = pet.age > 1800 ? 'adult' : pet.age > 300 ? 'teen' : 'baby'
+  const sleepy = pet.quirk == 'Sleepyhead' ? 1.3 : 1
+
+  if (pet.asleep) {
+    pet.energy += s * 0.3
+    pet.full -= s / 60
+    if (pet.light) pet.fun -= s / 40
+    if (pet.energy >= 100) { pet.asleep = false; toast(`${pet.name} woke up`); act('wave', 1.4) }
+  } else {
+    pet.energy -= s / 40 * sleepy
+    pet.full -= s / (pet.quirk == 'Foodie' ? 15 : 20)
+    pet.fun -= s / 30
+    if (pet.energy <= 4) { pet.asleep = true; toast(`${pet.name} passed out`) }
+  }
+  if ((pet.poopT -= s) <= 0) {
+    if (pet.poops < 4) pet.poops++
+    pet.poopT = rand(150, 300)
+  }
+  pet.clean -= s / 50 * pet.poops
+
+  const gross = pet.clean < 25 || pet.full <= 0
+  pet.sickT = gross ? pet.sickT + s : Math.max(0, pet.sickT - s)
+  if (pet.sickT > 60 && !pet.sick) { pet.sick = true; toast(`${pet.name} feels sick. Medicine is in Feed.`, 5) }
+  pet.health += (pet.sick || pet.full <= 0 || pet.fun <= 0) ? -s / 30 : s / 60
+  for (const k of ['full', 'fun', 'energy', 'clean', 'health']) pet[k] = clamp(pet[k])
+  if (pet.health <= 0) { pet.gone = true; toast(`${pet.name} uploaded itself to the cloud…`, 99) }
+}
+
+// ---------------- the pet on screen ----------------
+const me = { x: 180, dir: 1, target: 180, hop: 0, squash: 0, rot: 0, blink: 0, blinkT: 2, look: 0, action: null, quirkT: 8 }
+let parts = [], bubble = null, t = 0, pokes = [], petting = 0, petCool = 0
+
+function act(type, dur, extra = {}) { me.action = { type, t: 0, dur, ...extra } }
+function say(text, secs = 1.6, think = false) { bubble = { text, t: secs, think } }
+function burst(x, y, emo, n = 6, spread = 60) {
+  for (let i = 0; i < n; i++) parts.push({ x, y, vx: rand(-spread, spread), vy: rand(-140, -40), emo, life: rand(0.8, 1.4), size: rand(12, 20) })
+}
+
+function skin() {
+  // on the lcd everything is dark pixels on a light screen
+  if (room().lcd) return { a: '#b9c58f', b: '#2f3b1c' }
+  if (pet.skin == 'holo') {
+    const h = (t * 60) % 360
+    return { a: `hsl(${h},100%,82%)`, b: `hsl(${(h + 60) % 360},90%,62%)` }
+  }
+  return STYLE.skins.find(s => s.id == pet.skin)
+}
+const room = () => STYLE.rooms.find(r => r.id == (pet ? pet.room : 'lcd')) || STYLE.rooms[0]
+const stageSize = () => ({ baby: 62, teen: 78, adult: 94 })[pet.stage] || 70
+
+function mood() {
+  if (pet.gone) return 'gone'
+  if (pet.asleep) return 'sleep'
+  if (pet.sick) return 'sick'
+  if (pet.full < 25) return 'hungry'
+  if (pet.fun < 25) return 'bored'
+  if (pet.energy < 20) return 'tired'
+  if (pet.clean < 40) return 'stinky'
+  return 'happy'
+}
+
+// draws the pet with its feet at (x, y)
+function drawPet(x, y, size, o = {}) {
+  const sk = o.skin || skin()
+  const sq = o.squash || 0, w = size * (1 + sq * 0.18), h = size * (1 - sq * 0.18)
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.rotate(o.rot || 0)
+
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,.35)'
+  ctx.beginPath(); ctx.ellipse(0, 2 + (o.lift || 0), w * 0.42, 6, 0, 0, 7); ctx.fill()
+  ctx.translate(0, -(o.lift || 0))
+
+  // antenna, bulb color shows mood
+  const m = o.mood || 'happy'
+  const bulb = { happy: '#7dffd6', hungry: '#ffb13c', bored: '#9ab0ff', tired: '#c7a6ff', stinky: '#b8d34a', sick: '#ff4f6d', sleep: '#8e5cff' }[m] || '#7dffd6'
+  ctx.strokeStyle = sk.b; ctx.lineWidth = 3; ctx.lineCap = 'round'
+  ctx.beginPath(); ctx.moveTo(0, -h * 0.92); ctx.quadraticCurveTo(size * 0.12, -h * 1.15, size * 0.08, -h * 1.28); ctx.stroke()
+  ctx.save()
+  ctx.shadowColor = bulb; ctx.shadowBlur = 16
+  ctx.fillStyle = (m == 'sick' && Math.floor(t * 4) % 2) ? '#661020' : bulb
+  ctx.beginPath(); ctx.arc(size * 0.08, -h * 1.3, size * 0.07, 0, 7); ctx.fill()
+  ctx.restore()
+
+  // ears for teens and adults
+  if (pet.stage != 'baby') {
+    ctx.fillStyle = sk.b
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * w * 0.42, -h * 0.82, size * 0.1, size * 0.16, s * 0.5, 0, 7); ctx.fill() }
+  }
+  // feet
+  ctx.fillStyle = sk.b
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * w * 0.2, -3, size * 0.12, size * 0.07, 0, 0, 7); ctx.fill() }
+
+  // body with a glow
+  ctx.save()
+  ctx.shadowColor = sk.b; ctx.shadowBlur = 22
+  const g = ctx.createRadialGradient(-w * 0.15, -h * 0.7, size * 0.1, 0, -h * 0.45, size * 0.7)
+  g.addColorStop(0, '#ffffff'); g.addColorStop(0.25, sk.a); g.addColorStop(1, sk.b)
+  ctx.fillStyle = g
+  ctx.beginPath(); ctx.ellipse(0, -h * 0.48, w * 0.5, h * 0.48, 0, 0, 7); ctx.fill()
+  ctx.restore()
+  // shine
+  ctx.fillStyle = 'rgba(255,255,255,.55)'
+  ctx.beginPath(); ctx.ellipse(-w * 0.2, -h * 0.75, size * 0.09, size * 0.05, -0.5, 0, 7); ctx.fill()
+
+  // face
+  const ey = -h * 0.52, ex = w * 0.17, er = size * 0.1, look = (o.look || 0) * size * 0.03
+  ctx.fillStyle = '#1b1238'; ctx.strokeStyle = '#1b1238'; ctx.lineWidth = 2.5
+  const eyes = o.eyes || 'open'
+  for (const s of [-1, 1]) {
+    const cx = s * ex + look
+    ctx.beginPath()
+    if (eyes == 'open') {
+      ctx.ellipse(cx, ey, er * 0.8, er, 0, 0, 7); ctx.fill()
+      ctx.fillStyle = '#fff'
+      ctx.beginPath(); ctx.arc(cx - er * 0.3, ey - er * 0.4, er * 0.32, 0, 7); ctx.fill()
+      ctx.beginPath(); ctx.arc(cx + er * 0.3, ey + er * 0.35, er * 0.15, 0, 7); ctx.fill()
+      ctx.fillStyle = '#1b1238'
+    } else if (eyes == 'happy') {
+      ctx.arc(cx, ey + er * 0.4, er * 0.6, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
+    } else if (eyes == 'closed' || eyes == 'blink') {
+      ctx.arc(cx, ey - er * 0.2, er * 0.6, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke()
+    } else if (eyes == 'dizzy') {
+      for (let a = 0; a < 12; a += 0.4) ctx.lineTo(cx + Math.cos(a + t * 8) * a * er / 12, ey + Math.sin(a + t * 8) * a * er / 12)
+      ctx.stroke()
+    } else if (eyes == 'x') {
+      ctx.moveTo(cx - er * 0.5, ey - er * 0.5); ctx.lineTo(cx + er * 0.5, ey + er * 0.5)
+      ctx.moveTo(cx + er * 0.5, ey - er * 0.5); ctx.lineTo(cx - er * 0.5, ey + er * 0.5); ctx.stroke()
+    } else if (eyes == 'love') {
+      ctx.fillStyle = '#ff4f8a'
+      const r = er * 0.55
+      ctx.moveTo(cx, ey + r)
+      ctx.bezierCurveTo(cx - r * 2, ey - r * 0.3, cx - r * 0.6, ey - r * 1.6, cx, ey - r * 0.4)
+      ctx.bezierCurveTo(cx + r * 0.6, ey - r * 1.6, cx + r * 2, ey - r * 0.3, cx, ey + r)
+      ctx.fill()
+      ctx.fillStyle = '#1b1238'
+    }
+  }
+  // cheeks
+  ctx.fillStyle = 'rgba(255,110,170,.55)'
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * w * 0.3 + look, ey + er * 1.4, er * 0.7, er * 0.4, 0, 0, 7); ctx.fill() }
+  // mouth
+  const my = ey + er * 1.6, mouth = o.mouth || 'smile'
+  ctx.beginPath()
+  if (mouth == 'open') {
+    ctx.fillStyle = '#5a1030'; ctx.ellipse(look, my + 2, er * 0.6, er * 0.55, 0, 0, 7); ctx.fill()
+    ctx.fillStyle = '#ff7aa8'; ctx.beginPath(); ctx.ellipse(look, my + er * 0.4, er * 0.35, er * 0.2, 0, 0, 7); ctx.fill()
+  } else if (mouth == 'o') {
+    ctx.arc(look, my + 2, er * 0.25, 0, 7); ctx.stroke()
+  } else if (mouth == 'flat') {
+    ctx.moveTo(look - er * 0.4, my + 2); ctx.lineTo(look + er * 0.4, my + 2); ctx.stroke()
+  } else {
+    // little cat mouth
+    ctx.arc(look - er * 0.25, my, er * 0.25, 0.1, Math.PI - 0.1)
+    ctx.moveTo(look + er * 0.5, my)
+    ctx.arc(look + er * 0.25, my, er * 0.25, 0.1, Math.PI - 0.1)
+    ctx.stroke()
+  }
+
+  drawHat(o.hat ?? pet.hat, w, h, size, ey, er)
+  ctx.restore()
+}
+
+function drawHat(id, w, h, size, ey, er) {
+  const top = -h * 0.93
+  if (id == 'bow') {
+    ctx.fillStyle = '#ff4f8a'
+    ctx.save(); ctx.translate(w * 0.22, top + 4); ctx.rotate(0.3)
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-size * 0.18, -size * 0.1); ctx.lineTo(-size * 0.18, size * 0.1); ctx.fill()
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(size * 0.18, -size * 0.1); ctx.lineTo(size * 0.18, size * 0.1); ctx.fill()
+    ctx.fillStyle = '#ffd1e3'; ctx.beginPath(); ctx.arc(0, 0, size * 0.05, 0, 7); ctx.fill()
+    ctx.restore()
+  }
+  if (id == 'cap') {
+    ctx.fillStyle = '#5b7cff'
+    ctx.beginPath(); ctx.ellipse(0, top + size * 0.08, w * 0.34, size * 0.2, 0, Math.PI, 0); ctx.fill()
+    ctx.fillStyle = '#3a56d6'
+    ctx.beginPath(); ctx.ellipse(w * 0.25, top + size * 0.08, w * 0.24, size * 0.05, 0, 0, 7); ctx.fill()
+  }
+  if (id == 'phones') {
+    ctx.strokeStyle = '#2b2350'; ctx.lineWidth = 5
+    ctx.beginPath(); ctx.arc(0, -h * 0.5, w * 0.5, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke()
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = '#2b2350'
+      ctx.beginPath(); ctx.ellipse(s * w * 0.48, -h * 0.55, size * 0.08, size * 0.13, 0, 0, 7); ctx.fill()
+      ctx.save(); ctx.shadowColor = room().c; ctx.shadowBlur = 10
+      ctx.fillStyle = Math.floor(t * 3 + s) % 2 ? room().c : room().d
+      ctx.beginPath(); ctx.arc(s * w * 0.48, -h * 0.55, size * 0.04, 0, 7); ctx.fill()
+      ctx.restore()
+    }
+  }
+  if (id == 'visor') {
+    ctx.save()
+    ctx.shadowColor = room().c; ctx.shadowBlur = 12
+    ctx.fillStyle = 'rgba(56,232,255,.35)'
+    ctx.strokeStyle = room().c; ctx.lineWidth = 2
+    ctx.beginPath(); ctx.roundRect(-w * 0.42, ey - er * 1.1, w * 0.84, er * 2.1, er); ctx.fill(); ctx.stroke()
+    // scan line
+    ctx.fillStyle = 'rgba(255,255,255,.6)'
+    const sx = -w * 0.38 + ((t * 60) % (w * 0.76))
+    ctx.fillRect(sx, ey - er * 0.9, 2, er * 1.8)
+    ctx.restore()
+  }
+  if (id == 'crown') {
+    ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#c99a12'; ctx.lineWidth = 1.5
+    const cw = size * 0.36, ch = size * 0.2, y0 = top + 2
+    ctx.beginPath()
+    ctx.moveTo(-cw, y0); ctx.lineTo(-cw, y0 - ch); ctx.lineTo(-cw / 2, y0 - ch * 0.5); ctx.lineTo(0, y0 - ch * 1.2)
+    ctx.lineTo(cw / 2, y0 - ch * 0.5); ctx.lineTo(cw, y0 - ch); ctx.lineTo(cw, y0); ctx.closePath()
+    ctx.fill(); ctx.stroke()
+    ctx.fillStyle = '#ff4f8a'; ctx.beginPath(); ctx.arc(0, y0 - ch * 0.45, size * 0.035, 0, 7); ctx.fill()
+  }
+}
+
+function drawEgg(x, y) {
+  const wob = Math.sin(t * 10) * (pet.age > 8 ? 0.15 : 0.05)
+  ctx.save()
+  ctx.translate(x, y); ctx.rotate(wob)
+  ctx.shadowColor = room().c; ctx.shadowBlur = 24
+  const g = ctx.createLinearGradient(-30, -80, 30, 0)
+  g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#c7a6ff')
+  ctx.fillStyle = g
+  ctx.beginPath(); ctx.ellipse(0, -38, 30, 38, 0, 0, 7); ctx.fill()
+  ctx.shadowBlur = 0
+  // circuit lines
+  ctx.strokeStyle = room().c; ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(-28, -30); ctx.lineTo(-12, -30); ctx.lineTo(-6, -40); ctx.lineTo(10, -40); ctx.lineTo(16, -50); ctx.lineTo(26, -50)
+  ctx.moveTo(-20, -58); ctx.lineTo(-8, -58); ctx.lineTo(-4, -64)
+  ctx.stroke()
+  if (pet.age > 10) { ctx.strokeStyle = '#2a1f55'; ctx.beginPath(); ctx.moveTo(-10, -70); ctx.lineTo(-2, -62); ctx.lineTo(-8, -56); ctx.lineTo(2, -48); ctx.stroke() }
+  ctx.restore()
+}
+
+function bubbleAt(x, y) {
+  if (!bubble) return
+  ctx.font = '20px Silkscreen, monospace'
+  const tw = ctx.measureText(bubble.text).width + 18, bh = 32
+  const bx = clamp(x - tw / 2, 6, W - tw - 6), by = y - bh
+  ctx.fillStyle = room().lcd ? '#26301a' : 'rgba(255,255,255,.95)'
+  ctx.beginPath(); ctx.roundRect(bx, by, tw, bh, 6); ctx.fill()
+  if (bubble.think) {
+    ctx.beginPath(); ctx.arc(x - 6, y + 6, 4, 0, 7); ctx.arc(x - 10, y + 13, 2.5, 0, 7); ctx.fill()
+  } else {
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 1); ctx.lineTo(x, y + 8); ctx.lineTo(x + 6, y - 1); ctx.fill()
+  }
+  ctx.fillStyle = room().lcd ? '#e4ecc8' : '#2a1f55'
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText(bubble.text, bx + tw / 2, by + bh / 2 + 1)
+}
+
+function drawRoom() {
+  const r = room()
+  if (r.lcd) {
+    // light lcd background with dark pixels, like the old toys
+    ctx.fillStyle = '#e4ecc8'
+    ctx.fillRect(0, 0, W, H)
+    ctx.fillStyle = 'rgba(40,50,20,.35)'
+    for (let i = 0; i < W; i += 8) if (i % 16) ctx.fillRect(i, FLOOR + 4, 4, 2)
+    for (let i = 0; i < 5; i++) {
+      const cx = (i * 83 + t * 6) % (W + 40) - 20
+      ctx.fillStyle = 'rgba(40,50,20,.18)'
+      ctx.beginPath(); ctx.ellipse(cx, 40 + (i % 3) * 22, 20, 7, 0, 0, 7); ctx.fill()
+    }
+    return
+  }
+  const g = ctx.createLinearGradient(0, 0, 0, H)
+  g.addColorStop(0, '#140b34'); g.addColorStop(0.6, '#0a0618'); g.addColorStop(1, '#170a2c')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, W, H)
+  // stars
+  for (let i = 0; i < 28; i++) {
+    const sx = (i * 97) % W, sy = (i * 53) % 150
+    ctx.globalAlpha = 0.3 + 0.7 * Math.abs(Math.sin(t * 1.5 + i))
+    ctx.fillStyle = i % 3 ? '#fff' : r.c
+    ctx.fillRect(sx, sy, 2, 2)
+  }
+  ctx.globalAlpha = 1
+  // neon floor grid
+  const hz = 170
+  ctx.strokeStyle = r.c
+  ctx.lineWidth = 1
+  ctx.globalAlpha = 0.5
+  ctx.beginPath()
+  for (let i = -10; i <= 10; i++) { ctx.moveTo(W / 2 + i * 12, hz); ctx.lineTo(W / 2 + i * 60, H) }
+  for (let i = 0; i < 8; i++) {
+    const k = ((i + (t * 0.4) % 1) / 8) ** 2
+    const y = hz + k * (H - hz)
+    ctx.moveTo(0, y); ctx.lineTo(W, y)
+  }
+  ctx.stroke()
+  ctx.globalAlpha = 1
+  // horizon glow
+  const hg = ctx.createLinearGradient(0, hz - 20, 0, hz + 10)
+  hg.addColorStop(0, 'rgba(0,0,0,0)'); hg.addColorStop(1, r.d + '55')
+  ctx.fillStyle = hg
+  ctx.fillRect(0, hz - 20, W, 30)
+}
+
+// ---------------- home behaviour ----------------
+function startQuirk() {
+  const mine = QUIRKS[pet.quirk]
+  const type = Math.random() < 0.55 ? mine : pick(['hiccup', 'dance', 'flip', 'sneeze', 'yawn', 'look'])
+  if (type == 'sneeze') { act('sneeze', 1.4); say('a… a…', 0.7) }
+  if (type == 'dance') { act('dance', 3); say('♪ ♫', 1.2) }
+  if (type == 'yawn') { act('yawn', 1.6); say('*yawn*', 1.2) }
+  if (type == 'flip') act('flip', 1)
+  if (type == 'hiccup') act('hiccup', 2)
+  if (type == 'look') act('look', 2)
+  if (type == 'ask') { act('ask', 2.4); say(FOODS.find(f => f.id == pet.fav).emo + '?', 2.2, true) }
+}
+
+function updateHome(dt) {
+  if (!pet || pet.stage == 'egg' || pet.gone) return
+  me.squash *= Math.pow(0.002, dt)
+  me.blinkT -= dt
+  if (me.blinkT <= 0) { me.blink = 0.12; me.blinkT = rand(2, 5) }
+  me.blink -= dt
+  petCool -= dt
+
+  const a = me.action
+  if (a) {
+    a.t += dt
+    const k = a.t / a.dur
+    if (a.type == 'sneeze' && a.t > 0.7 && !a.done) { a.done = true; me.squash = -1; say('ACHOO!', 0.8); sfx.achoo(); burst(me.x + me.dir * 20, FLOOR - 40, '💦', 5); me.x -= me.dir * 14 }
+    if (a.type == 'hiccup' && Math.floor(a.t * 1.5) != a.n) { a.n = Math.floor(a.t * 1.5); me.squash = 0.6; say('hic!', 0.4); tone(900, 0.05, 'square', 0.04) }
+    if (a.type == 'flip' && k > 0.9 && !a.done) { a.done = true; say('ta-da!', 1); burst(me.x, FLOOR - 20, '✨', 6) }
+    if (a.type == 'dance' && Math.random() < dt * 3) burst(me.x, FLOOR - 70, pick(['♪', '♫']), 1, 30)
+    if (a.type == 'love' && Math.random() < dt * 5) burst(me.x, FLOOR - 60, '💖', 1, 40)
+    if (a.type == 'dizzy' && Math.random() < dt * 4) burst(me.x, FLOOR - 80, '⭐', 1, 20)
+    if (a.t >= a.dur) me.action = null
+    return
+  }
+  if (pet.asleep) {
+    if (Math.random() < dt * 0.8) burst(me.x + 20, FLOOR - 60, '💤', 1, 10)
+    return
+  }
+  // wander around
+  const lim = W - 40 - pet.poops * 28
+  if (Math.abs(me.target - me.x) < 3) { if (Math.random() < dt * 0.8) me.target = rand(50, lim) }
+  else {
+    me.dir = Math.sign(me.target - me.x)
+    me.x += me.dir * 38 * dt
+    me.hop += dt * 9
+  }
+  me.x = clamp(me.x, 40, lim)
+  if ((me.quirkT -= dt) <= 0) { startQuirk(); me.quirkT = rand(7, 14) }
+}
+
+function petPose() {
+  const a = me.action, m = mood()
+  const o = { mood: m, squash: me.squash, look: me.dir * 0.6, lift: 0, rot: 0, eyes: 'open', mouth: 'smile' }
+  if (m == 'sick') { o.eyes = 'x'; o.mouth = 'flat' }
+  if (m == 'hungry' || m == 'bored' || m == 'tired') o.mouth = 'flat'
+  if (pet.asleep) { o.eyes = 'closed'; o.mouth = 'o'; o.squash = Math.sin(t * 2) * 0.1 }
+  else if (me.blink > 0) o.eyes = 'blink'
+  if (!a && !pet.asleep && Math.abs(me.target - me.x) >= 3) o.lift = Math.abs(Math.sin(me.hop)) * 6
+  if (a) {
+    const k = a.t / a.dur
+    if (a.type == 'eat') { o.mouth = Math.floor(a.t * 6) % 2 ? 'open' : 'smile'; o.eyes = 'happy' }
+    if (a.type == 'dance') { o.lift = Math.abs(Math.sin(a.t * 8)) * 12; o.rot = Math.sin(a.t * 8) * 0.18; o.eyes = 'happy'; o.mouth = 'open' }
+    if (a.type == 'yawn') { o.mouth = 'open'; o.eyes = 'closed'; o.squash = -0.3 * Math.sin(k * Math.PI) }
+    if (a.type == 'flip') { o.lift = Math.sin(k * Math.PI) * 60; o.rot = k * Math.PI * 2 * me.dir; o.eyes = 'happy' }
+    if (a.type == 'sneeze' && a.t < 0.7) { o.squash = -0.5 * (a.t / 0.7); o.eyes = 'closed'; o.mouth = 'o' }
+    if (a.type == 'hiccup') { o.lift = Math.max(0, Math.sin(a.t * 9.4)) * 8; o.mouth = 'o' }
+    if (a.type == 'look') o.look = Math.sin(a.t * 4) > 0 ? 1 : -1
+    if (a.type == 'ask') o.look = 0
+    if (a.type == 'giggle' || a.type == 'wave') { o.eyes = 'happy'; o.mouth = 'open'; o.lift = Math.abs(Math.sin(a.t * 12)) * 10 }
+    if (a.type == 'dizzy') { o.eyes = 'dizzy'; o.mouth = 'o'; o.rot = Math.sin(a.t * 6) * 0.25 }
+    if (a.type == 'love') { o.eyes = 'love'; o.mouth = 'open'; o.lift = Math.abs(Math.sin(a.t * 6)) * 6 }
+  }
+  return o
+}
+
+function drawHome() {
+  drawRoom()
+  if (!pet) return
+  // poops (cute ones)
+  ctx.font = '22px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'
+  for (let i = 0; i < pet.poops; i++) {
+    const px = W - 26 - i * 28
+    ctx.fillText('💩', px, FLOOR + 2)
+    ctx.strokeStyle = 'rgba(180,220,80,.6)'; ctx.lineWidth = 1.5
+    ctx.beginPath()
+    for (let j = 0; j < 2; j++) { const sx = px - 4 + j * 8, w = Math.sin(t * 4 + i + j) * 3; ctx.moveTo(sx, FLOOR - 24); ctx.quadraticCurveTo(sx + w, FLOOR - 32, sx, FLOOR - 40) }
+    ctx.stroke()
+  }
+
+  if (pet.gone) {
+    ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 2)
+    drawPet(180, FLOOR - 40 - Math.sin(t) * 8, 60, { eyes: 'closed', mouth: 'smile', mood: 'sleep', hat: 'none' })
+    ctx.globalAlpha = 1
+    ctx.fillStyle = '#fff'; ctx.font = '16px Silkscreen, monospace'; ctx.textAlign = 'center'
+    ctx.fillText('☁️ uploaded to the cloud', 180, 60)
+    return
+  }
+  if (pet.stage == 'egg') { drawEgg(180, FLOOR); return }
+
+  const size = stageSize(), pose = petPose()
+  drawPet(me.x, FLOOR, size, pose)
+  // food being eaten
+  const a = me.action
+  if (a && a.type == 'eat') {
+    const k = a.t / a.dur
+    ctx.font = (28 * (1 - k * 0.8)) + 'px system-ui'; ctx.textAlign = 'center'
+    ctx.fillText(a.emo, me.x + me.dir * size * 0.55, FLOOR - size * 0.35)
+  }
+  if (bubble) bubbleAt(me.x, FLOOR - size * 1.45 - (pose.lift || 0))
+  if (!pet.light) {
+    ctx.fillStyle = 'rgba(5,2,15,.7)'
+    ctx.fillRect(0, 0, W, H)
+  }
+}
+
+function drawParts(dt) {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  parts = parts.filter(p => {
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 60 * dt
+    ctx.globalAlpha = Math.min(1, p.life * 2)
+    ctx.font = p.size + 'px system-ui'
+    ctx.fillStyle = '#fff'
+    ctx.fillText(p.emo, p.x, p.y)
+    return (p.life -= dt) > 0
+  })
+  ctx.globalAlpha = 1
+}
+
+// ---------------- mini games ----------------
+let game = null
+function startGame(id) {
+  closeSheet()
+  if (pet.energy < 15) { toast(`${pet.name} is too tired to play`); return sfx.nope() }
+  if (id == 'catch') game = { id, time: 20, px: 180, items: [], spawn: 0, earned: 0, stun: 0, keys: {} }
+  if (id == 'simon') game = { id, seq: [Math.random() * 4 | 0], i: 0, phase: 'show', showT: 0.6, lit: -1, litT: 0, round: 0 }
+  if (id == 'shell') shellRound({ id, round: 0, earned: 0 })
+  render()
+}
+
+function endGame(earned, funBoost) {
+  pet.coins += earned
+  pet.fun = clamp(pet.fun + funBoost)
+  pet.energy = clamp(pet.energy - 8)
+  pet.full = clamp(pet.full - 4)
+  game.over = { earned, t: 2.2 }
+  sfx.win()
+}
+
+// --- coin rain ---
+function updateCatch(dt) {
+  const gm = game
+  if (gm.over) return
+  gm.time -= dt
+  if (gm.keys.left) gm.px -= 260 * dt
+  if (gm.keys.right) gm.px += 260 * dt
+  gm.px = clamp(gm.px, 30, W - 30)
+  gm.stun -= dt
+  if ((gm.spawn -= dt) <= 0) {
+    gm.spawn = Math.max(0.22, 0.5 - (20 - gm.time) * 0.012)
+    const r = Math.random()
+    gm.items.push({ x: rand(20, W - 20), y: -20, vy: rand(110, 190) + (20 - gm.time) * 4, emo: r < 0.06 ? '💎' : r < 0.2 ? '🍬' : r < 0.42 ? '👾' : '🪙' })
+  }
+  gm.items = gm.items.filter(it => {
+    it.y += it.vy * dt
+    if (it.y > FLOOR - 50 && it.y < FLOOR - 10 && Math.abs(it.x - gm.px) < 30 && gm.stun <= 0) {
+      if (it.emo == '🪙') { gm.earned++; sfx.coin() }
+      if (it.emo == '💎') { gm.earned += 5; sfx.win() }
+      if (it.emo == '🍬') { pet.fun = clamp(pet.fun + 2); sfx.pop() }
+      if (it.emo == '👾') { gm.stun = 0.9; gm.earned = Math.max(0, gm.earned - 2); sfx.nope(); buzz(80) }
+      burst(it.x, it.y, it.emo == '👾' ? '💥' : '✨', 3, 40)
+      return false
+    }
+    return it.y < H + 20
+  })
+  if (gm.time <= 0) endGame(gm.earned, 20)
+}
+function drawCatch() {
+  const gm = game
+  drawRoom()
+  ctx.font = '26px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  for (const it of gm.items) ctx.fillText(it.emo, it.x, it.y)
+  drawPet(gm.px, FLOOR, 50, { eyes: gm.stun > 0 ? 'dizzy' : 'happy', mouth: 'open', mood: 'happy', lift: Math.abs(Math.sin(t * 10)) * 3 })
+  hudBar(`🪙 ${gm.earned}`, gm.time / 20)
+}
+
+// --- light memory ---
+const PADS = ['#38e8ff', '#ff4fd8', '#9dff4f', '#ffd23f']
+const padRect = i => ({ x: 70 + (i % 2) * 115, y: 52 + Math.floor(i / 2) * 105, w: 105, h: 95 })
+function updateSimon(dt) {
+  const gm = game
+  if (gm.over) return
+  gm.litT -= dt
+  if (gm.litT <= 0) gm.lit = -1
+  if (gm.phase == 'show') {
+    gm.showT -= dt
+    if (gm.showT <= 0) {
+      if (gm.i < gm.seq.length) {
+        gm.lit = gm.seq[gm.i]; gm.litT = 0.38; sfx.pad(gm.lit)
+        gm.i++; gm.showT = Math.max(0.3, 0.55 - gm.round * 0.02)
+      } else { gm.phase = 'input'; gm.i = 0 }
+    }
+  }
+}
+function simonPress(i) {
+  const gm = game
+  if (gm.phase != 'input' || gm.over) return
+  gm.lit = i; gm.litT = 0.2
+  if (gm.seq[gm.i] != i) {
+    sfx.nope()
+    gm.phase = 'fail'
+    endGame(gm.round * 3, 10 + gm.round * 3)
+    return
+  }
+  sfx.pad(i)
+  gm.i++
+  if (gm.i == gm.seq.length) {
+    gm.round++
+    gm.seq.push(Math.random() * 4 | 0)
+    gm.phase = 'show'; gm.i = 0; gm.showT = 0.8
+    burst(180, 150, '⭐', 4)
+  }
+}
+function drawSimon() {
+  const gm = game
+  drawRoom()
+  PADS.forEach((c, i) => {
+    const r = padRect(i), on = gm.lit == i
+    ctx.save()
+    if (on) { ctx.shadowColor = c; ctx.shadowBlur = 30 }
+    ctx.fillStyle = on ? c : c + '33'
+    ctx.strokeStyle = c; ctx.lineWidth = 3
+    ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 18); ctx.fill(); ctx.stroke()
+    ctx.restore()
+    ctx.fillStyle = on ? '#0a0618' : c
+    ctx.font = '600 14px Silkscreen, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(i + 1, r.x + r.w / 2, r.y + r.h / 2)
+  })
+  hudBar(gm.phase == 'input' ? `Your turn · round ${gm.round + 1}` : `Watch… · round ${gm.round + 1}`, null)
+}
+
+// --- where's blip (shell game) ---
+const slotX = s => 75 + s * 105
+function shellRound(state) {
+  const r = state.round
+  game = { ...state, phase: 'peek', t: 1.2, boxes: [0, 1, 2].map(s => ({ slot: s, pet: false })), swaps: 3 + r * 2, swap: null, pick: -1 }
+  game.boxes[Math.random() * 3 | 0].pet = true
+}
+function updateShell(dt) {
+  const gm = game
+  if (gm.over) return
+  gm.t -= dt
+  if (gm.phase == 'peek' && gm.t <= 0) { gm.phase = 'shuffle'; gm.t = 0 }
+  if (gm.phase == 'shuffle') {
+    if (!gm.swap) {
+      if (gm.swaps <= 0) { gm.phase = 'pick'; return }
+      const a = Math.random() * 3 | 0, b = (a + 1 + (Math.random() * 2 | 0)) % 3
+      gm.swap = { a: gm.boxes.find(x => x.slot == a), b: gm.boxes.find(x => x.slot == b), k: 0, dur: Math.max(0.16, 0.42 - gm.round * 0.05) }
+      gm.swaps--
+      tone(400, 0.05, 'triangle', 0.04)
+    }
+    const s = gm.swap
+    s.k += dt / s.dur
+    if (s.k >= 1) { const tmp = s.a.slot; s.a.slot = s.b.slot; s.b.slot = tmp; gm.swap = null }
+  }
+  if (gm.phase == 'reveal' && gm.t <= 0) {
+    if (gm.won) shellRound({ id: 'shell', round: gm.round + 1, earned: gm.earned })
+    else endGame(gm.earned, 10 + gm.round * 5)
+  }
+}
+function shellPick(x) {
+  const gm = game
+  if (gm.phase != 'pick') return
+  const box = gm.boxes.find(b => Math.abs(slotX(b.slot) - x) < 45)
+  if (!box) return
+  gm.pick = box.slot
+  gm.won = box.pet
+  gm.phase = 'reveal'; gm.t = 1.3
+  if (gm.won) { gm.earned += 8; sfx.win(); burst(slotX(box.slot), 170, '🪙', 6) } else sfx.nope()
+}
+function drawShell() {
+  const gm = game
+  drawRoom()
+  for (const b of gm.boxes) {
+    let x = slotX(b.slot), y = 220
+    const s = gm.swap
+    if (s && (b == s.a || b == s.b)) {
+      const other = b == s.a ? s.b : s.a, k = Math.min(1, s.k)
+      x = lerp(slotX(b.slot), slotX(other.slot), k)
+      y -= Math.sin(k * Math.PI) * 30 * (b == s.a ? 1 : -1)
+    }
+    const lift = (gm.phase == 'peek' && b.pet) || (gm.phase == 'reveal' && (b.slot == gm.pick || b.pet)) ? 55 : 0
+    if (b.pet && lift) drawPet(x, 232, 46, { eyes: 'happy', mouth: 'open', mood: 'happy' })
+    ctx.save()
+    ctx.shadowColor = room().c; ctx.shadowBlur = 16
+    ctx.fillStyle = '#1d1350'; ctx.strokeStyle = room().c; ctx.lineWidth = 3
+    ctx.beginPath(); ctx.roundRect(x - 38, y - lift - 40, 76, 62, 12); ctx.fill(); ctx.stroke()
+    ctx.restore()
+    ctx.fillStyle = room().c; ctx.font = '600 22px Silkscreen, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('?', x, y - lift - 9)
+  }
+  const label = { peek: 'Remember where it is', shuffle: 'Shuffling…', pick: 'Which box?', reveal: gm.won ? 'Found it! +8' : 'Nope!' }[gm.phase]
+  hudBar(`${label} · 🪙 ${gm.earned}`, null)
+}
+
+function hudBar(text, frac) {
+  ctx.fillStyle = 'rgba(10,6,24,.7)'
+  ctx.beginPath(); ctx.roundRect(10, 10, W - 20, 30, 15); ctx.fill()
+  ctx.fillStyle = '#fff'; ctx.font = '16px Silkscreen, monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+  ctx.fillText(text, 24, 26)
+  if (frac != null) {
+    ctx.fillStyle = 'rgba(255,255,255,.15)'; ctx.fillRect(W - 120, 22, 92, 8)
+    ctx.fillStyle = room().c; ctx.fillRect(W - 120, 22, 92 * Math.max(0, frac), 8)
+  }
+}
+function drawGameOver() {
+  const o = game.over
+  ctx.fillStyle = 'rgba(10,6,24,.75)'
+  ctx.fillRect(0, 0, W, H)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#fff'; ctx.font = '26px Silkscreen, monospace'
+  ctx.fillText(o.earned ? `+${o.earned} coins!` : 'Good game!', W / 2, H / 2 - 10)
+  ctx.font = '16px Silkscreen, monospace'; ctx.fillStyle = room().c
+  ctx.fillText('tap to go home', W / 2, H / 2 + 22)
+}
+
+// ---------------- sheets (menus) ----------------
+const sheet = $('sheet')
+function closeSheet() { sheet.classList.remove('open') }
+function openSheet(html) { sheet.innerHTML = '<button class="close" aria-label="Close">×</button>' + html; sheet.classList.add('open'); sheet.querySelector('.close').onclick = closeSheet }
+
+function feedSheet() {
+  openSheet(`<h2>Feed ${pet.name}</h2><p class="hint">${pet.name} loves ${FOODS.find(f => f.id == pet.fav).emo}</p><div class="items">` +
+    FOODS.map(f => `<button class="item" data-id="${f.id}" ${pet.coins < f.cost ? 'disabled' : ''}><span class="emo">${f.emo}</span>${f.name}<small>${f.desc}</small><span class="price">🪙 ${f.cost}</span></button>`).join('') + '</div>')
+  sheet.querySelectorAll('.item').forEach(b => b.onclick = () => feed(FOODS.find(f => f.id == b.dataset.id)))
+}
+function feed(f) {
+  if (f.meds) {
+    if (!pet.sick) { toast(`${pet.name} isn’t sick`); return sfx.nope() }
+    pet.coins -= f.cost; pet.sick = false; pet.sickT = 0; pet.fun = clamp(pet.fun - 5)
+    closeSheet(); say('bleh… better!', 1.6); sfx.chirp(); return render()
+  }
+  if (pet.full > 92 && !f.fun && !f.energy) { toast(`${pet.name} is too full`); return sfx.nope() }
+  pet.coins -= f.cost
+  pet.full = clamp(pet.full + (f.full || 0))
+  pet.fun = clamp(pet.fun + (f.fun || 0) + (f.id == pet.fav ? 15 : 0))
+  pet.energy = clamp(pet.energy + (f.energy || 0))
+  closeSheet()
+  act('eat', 1.6, { emo: f.emo })
+  if (f.id == pet.fav) { say('my favorite!!', 1.6); burst(me.x, FLOOR - 70, '💖', 5) }
+  sfx.chirp(); render()
+}
+
+function playSheet() {
+  openSheet(`<h2>Play</h2><p class="hint">Earn coins. Each game uses a bit of energy.</p><div class="items">` +
+    GAMES.map(g => `<button class="item" data-id="${g.id}"><span class="emo">${g.emo}</span>${g.name.replace('Blip', pet.name)}<small>${g.desc}</small></button>`).join('') + '</div>')
+  sheet.querySelectorAll('.item').forEach(b => b.onclick = () => startGame(b.dataset.id))
+}
+
+let styleTab = 'hats'
+function styleSheet() {
+  const key = { hats: 'hat', skins: 'skin', rooms: 'room' }[styleTab]
+  openSheet(`<h2>Style</h2><p class="hint">Buy once, wear forever.</p>
+    <div class="tabs">${['hats', 'skins', 'rooms'].map(tb => `<button data-tab="${tb}" class="${tb == styleTab ? 'on' : ''}">${{ hats: 'Hats', skins: 'Colors', rooms: 'Lights' }[tb]}</button>`).join('')}</div>
+    <div class="items">` + STYLE[styleTab].map(it => {
+      const owned = pet.owned.includes(it.id), worn = pet[key] == it.id
+      return `<button class="item ${worn ? 'on' : ''}" data-id="${it.id}" ${!owned && pet.coins < it.cost ? 'disabled' : ''}><span class="emo">${it.emo}</span>${it.name}<span class="price">${worn ? 'Wearing' : owned ? 'Wear' : '🪙 ' + it.cost}</span></button>`
+    }).join('') + '</div>')
+  sheet.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { styleTab = b.dataset.tab; styleSheet() })
+  sheet.querySelectorAll('.item').forEach(b => b.onclick = () => {
+    const it = STYLE[styleTab].find(x => x.id == b.dataset.id)
+    if (!pet.owned.includes(it.id)) { pet.coins -= it.cost; pet.owned.push(it.id); sfx.coin(); toast(`Bought ${it.name}`) }
+    pet[key] = it.id
+    if (pet.stage != 'egg') act('love', 1.5)
+    render(); styleSheet()
+  })
+}
+
+function nameSheet(again) {
+  openSheet(`<h2>${again ? 'A new egg!' : 'Hi! You found an egg'}</h2><p class="hint">What do you want to call it?</p>
+    <div class="namebox"><input id="nm" maxlength="12" value="Blip" aria-label="Pet name"><button class="big" id="hatch">Keep it</button></div>`)
+  sheet.querySelector('.close').remove()
+  const go = () => {
+    const n = $('nm').value.trim() || 'Blip'
+    pet = freshPet(n.slice(0, 12))
+    me.x = 180; me.action = null; game = null
+    closeSheet(); save(); render(); daily()
+  }
+  $('hatch').onclick = go
+  $('nm').onkeydown = e => { if (e.key == 'Enter') go() }
+}
+
+// ---------------- buttons ----------------
+function busy() {
+  if (pet.gone) { nameSheet(true); return true }
+  if (pet.stage == 'egg') { toast('It’s still an egg. Give it a moment'); return true }
+  if (pet.asleep) { toast(`Shh, ${pet.name} is sleeping`); return true }
+  if (game) return true
+  return false
+}
+$('b-feed').onclick = () => { if (!busy()) feedSheet() }
+$('b-play').onclick = () => { if (!busy()) playSheet() }
+$('b-style').onclick = () => { if (pet && !pet.gone && !game) styleSheet() }
+$('b-clean').onclick = () => {
+  if (!pet || pet.gone || game) return
+  if (!pet.poops && pet.clean > 90) { toast('Already sparkly'); return sfx.nope() }
+  pet.poops = 0; pet.clean = 100
+  burst(W - 60, FLOOR - 20, '🫧', 10, 80); sfx.pop()
+  if (pet.stage != 'egg' && !pet.asleep) say('fresh!', 1.2)
+  render()
+}
+$('b-light').onclick = () => {
+  if (!pet || pet.gone || game) return
+  pet.light = !pet.light
+  if (!pet.light && !pet.asleep && pet.stage != 'egg') {
+    if (pet.energy < 90) { pet.asleep = true; toast('Good night') }
+    else { toast(`${pet.name} isn’t sleepy yet`); say('not sleepy!', 1.2) }
+  }
+  if (pet.light && pet.asleep && pet.energy < 100) toast('Too bright! It needs more sleep')
+  tone(pet.light ? 660 : 330, 0.1, 'triangle', 0.06)
+  render()
+}
+
+// ---------------- pointer on the screen ----------------
+function canvasPos(e) {
+  const r = cv.getBoundingClientRect()
+  return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }
+}
+let down = false
+cv.addEventListener('pointerdown', e => {
+  const p = canvasPos(e)
+  down = true
+  if (game) {
+    if (game.over) { if (game.over.t <= 1.6) { game = null; render() } return }
+    if (game.id == 'simon') { for (let i = 0; i < 4; i++) { const r = padRect(i); if (p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h) simonPress(i) } }
+    if (game.id == 'shell') shellPick(p.x)
+    if (game.id == 'catch') game.px = p.x
+    return
+  }
+  if (!pet || pet.gone) return
+  if (pet.stage == 'egg') { burst(180, FLOOR - 40, '✨', 3); sfx.boop(); return }
+  // poke
+  const size = stageSize()
+  if (Math.abs(p.x - me.x) < size * 0.6 && p.y > FLOOR - size * 1.1 && p.y < FLOOR + 6) {
+    if (pet.asleep) { say('zzz…', 1); return }
+    const now = performance.now()
+    pokes = pokes.filter(x => now - x < 2000)
+    pokes.push(now)
+    buzz(15)
+    if (pokes.length >= 5) { act('dizzy', 2.4); say('@_@', 1.6); pokes = []; sfx.nope(); buzz([40, 40, 40]) }
+    else if (!me.action) { act('giggle', 0.7); say(pick(['hehe', 'boop!', 'hi!', 'that tickles']), 0.9); sfx.boop(); pet.fun = clamp(pet.fun + 1) }
+  }
+})
+cv.addEventListener('pointermove', e => {
+  const p = canvasPos(e)
+  if (game && game.id == 'catch' && !game.over) { game.px = p.x; return }
+  if (!down || !pet || game || pet.stage == 'egg' || pet.asleep || pet.gone) return
+  // rubbing it = petting
+  const size = stageSize()
+  if (Math.abs(p.x - me.x) < size * 0.6 && p.y > FLOOR - size && p.y < FLOOR) {
+    petting += 1
+    if (petting > 25 && petCool <= 0) {
+      petting = 0; petCool = 4
+      act('love', 1.6); say('♡ purr ♡', 1.4); pet.fun = clamp(pet.fun + 6); tone(600, 0.3, 'sine', 0.05, 1.5)
+    }
+  }
+})
+addEventListener('pointerup', () => { down = false; petting = 0 })
+addEventListener('pointercancel', () => { down = false; petting = 0 })
+cv.addEventListener('contextmenu', e => e.preventDefault())
+
+// phones only allow sound after a tap, so unlock it on the first one
+addEventListener('pointerdown', () => {
+  try { if (!ac) ac = new AudioContext(); if (ac.state == 'suspended') ac.resume() } catch (e) {}
+}, { once: true })
+
+// little buzz on phones that support it
+const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms) } catch (e) {} }
+addEventListener('keydown', e => {
+  if (!game || game.over) return
+  if (game.id == 'catch') { if (e.key == 'ArrowLeft') game.keys.left = true; if (e.key == 'ArrowRight') game.keys.right = true }
+  if (game.id == 'simon' && '1234'.includes(e.key)) simonPress(+e.key - 1)
+})
+addEventListener('keyup', e => {
+  if (game && game.id == 'catch') { if (e.key == 'ArrowLeft') game.keys.left = false; if (e.key == 'ArrowRight') game.keys.right = false }
+})
+
+// ---------------- hud ----------------
+function render() {
+  if (!pet) return
+  $('name').textContent = pet.name
+  $('coins').textContent = '🪙 ' + pet.coins
+  for (const k of ['full', 'fun', 'energy', 'clean']) $('m-' + k).style.width = pet[k] + '%'
+  const mins = Math.floor(pet.age / 60)
+  $('sub').textContent = pet.gone ? 'in the cloud now' : pet.stage == 'egg' ? 'an egg' :
+    `${pet.stage}, ${pet.quirk.toLowerCase()}, ${mins < 60 ? mins + ' min' : Math.floor(mins / 60) + ' h'} old`
+  const r = room(), m = mood()
+  const led = { happy: [r.c, r.d], hungry: ['#ffb13c', '#ff4f6d'], sick: ['#ff4f6d', '#661020'], sleep: ['#5b3db8', '#2a1f55'] }[m] || [r.c, r.d]
+  document.documentElement.style.setProperty('--led-a', led[0])
+  document.documentElement.style.setProperty('--led-b', led[1])
+  $('wrap').classList.toggle('dim', !pet.light)
+  const off = pet.gone || pet.stage == 'egg' || pet.asleep
+  $('b-feed').disabled = $('b-play').disabled = off && !pet.gone
+}
+
+function daily() {
+  const today = new Date().toDateString()
+  if (pet.lastDaily != today) {
+    pet.lastDaily = today
+    pet.coins += 20
+    toast('Daily bonus: +20 coins 🪙', 4)
+  }
+}
+
+// ---------------- main loop ----------------
+let last = performance.now(), simT = 0, saveT = 0, hudT = 0
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000)
+  last = now
+  t += dt
+  if (bubble && (bubble.t -= dt) <= 0) bubble = null
+  if (toastT > 0 && (toastT -= dt) <= 0) $('toast').textContent = ''
+
+  if (pet) {
+    if (!game && (simT += dt) >= 1) { step(simT); simT = 0 }
+    if ((saveT += dt) >= 2) { save(); saveT = 0 }
+    if ((hudT += dt) >= 0.25) { render(); hudT = 0 }
+  }
+
+  ctx.clearRect(0, 0, W, H)
+  ctx.imageSmoothingEnabled = false
+  if (game) {
+    if (game.over) game.over.t -= dt
+    if (game.id == 'catch') { updateCatch(dt); drawCatch() }
+    if (game.id == 'simon') { updateSimon(dt); drawSimon() }
+    if (game.id == 'shell') { updateShell(dt); drawShell() }
+    drawParts(dt)
+    if (game.over) { drawGameOver(); if (game.over.t <= -4) { game = null; render() } }
+  } else {
+    updateHome(dt)
+    drawHome()
+    drawParts(dt)
+  }
+  present()
+  requestAnimationFrame(loop)
+}
+
+// ---------------- boot ----------------
+if (!pet) {
+  drawRoom()
+  nameSheet(false)
+} else {
+  const away = Math.min((Date.now() - pet.saved) / 1000, 8 * 3600)
+  for (let s = 0; s < away; s += 10) step(Math.min(10, away - s))
+  daily()
+  if (away > 60 && !pet.gone && pet.stage != 'egg') { act('wave', 1.5); say('you’re back!!', 1.8) }
+  render()
+}
+requestAnimationFrame(loop)
+addEventListener('pagehide', save)
+
+// when you switch apps on your phone the page freezes, so catch up when you come back
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return save()
+  if (!pet) return
+  const away = Math.min((Date.now() - pet.saved) / 1000, 8 * 3600)
+  for (let s = 0; s < away; s += 10) step(Math.min(10, away - s))
+  daily()
+  if (away > 60 && !pet.gone && pet.stage != 'egg' && !game) { act('wave', 1.5); say('you’re back!!', 1.8) }
+  last = performance.now()
+  render()
+})
+</script>
+</body>
+</html>
